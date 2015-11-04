@@ -42,12 +42,14 @@ class PackageMetaBuilder(PackageBuilder):
         super(PackageMetaBuilder, self).__init__(build_spec)
         self._project_dependencies = {}
         logging.getLogger("requests").setLevel(logging.WARNING)
+        logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
     def _finalize_project_build(self, project):
         super(PackageMetaBuilder, self)._finalize_project_build(project)
         self._project_dependencies[project.name] = self._log_metadata(project)
 
     def _finalize_build(self):
+        super(PackageMetaBuilder, self)._finalize_build()
         for project_name, deps_info in self._project_dependencies.iteritems():
             LOG.info("%s dependency metadata:\n%s", project_name,
                      deps_info.getvalue())
