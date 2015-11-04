@@ -1,0 +1,1 @@
+-e git+https://github.com/blueboxgroup/giftwrap.git#egg=giftwrap
