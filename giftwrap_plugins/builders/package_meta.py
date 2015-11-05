@@ -42,6 +42,9 @@ class PackageMetaBuilder(PackageBuilder):
         super(PackageMetaBuilder, self).__init__(build_spec)
         self._project_deps = {}
         logging.getLogger("requests").setLevel(logging.WARNING)
+        urllib_logger = logging.getLogger("urllib3")
+        if urllib_logger:
+            urllib_logger.setLevel(logging.CRITICAL)
 
     def _finalize_project_build(self, project):
         super(PackageMetaBuilder, self)._finalize_project_build(project)
