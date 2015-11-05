@@ -49,9 +49,11 @@ class PackageMetaBuilder(PackageBuilder):
 
     def _finalize_build(self):
         super(PackageMetaBuilder, self)._finalize_build()
-        LOG.info("Python Dependency metadata:\n\n")
+
+        logged_deps = ""
         for (project_name, deps_info) in self._project_deps.iteritems():
-            LOG.info(deps_info)
+            logged_deps += deps_info
+        LOG.info("Python Dependency metadata:\n\n%s", logged_deps)
 
     def _log_metadata(self, project):
         dependencies = self._extract_dependencies(project)
