@@ -17,12 +17,12 @@
 #    under the License.
 
 import csv
-import StringIO
 import logging
 import requests
 
 from collections import OrderedDict
 from giftwrap.builders.package_builder import PackageBuilder
+from six import StringIO
 
 BASE_PYPI_URL = 'http://pypi.python.org/pypi/%(package)s/%(version)s/json'
 ordered_fieldnames = OrderedDict([
@@ -40,22 +40,23 @@ class PackageMetaBuilder(PackageBuilder):
 
     def __init__(self, build_spec):
         super(PackageMetaBuilder, self).__init__(build_spec)
-        self._project_dependencies = {}
+        self._project_deps = {}
         logging.getLogger("requests").setLevel(logging.WARNING)
 
     def _finalize_project_build(self, project):
         super(PackageMetaBuilder, self)._finalize_project_build(project)
-        self._project_dependencies[project.name] = self._log_metadata(project)
+        self._log_metadata(project)
 
     def _finalize_build(self):
-        for project_name, deps_info in self._project_dependencies.iteritems():
-            LOG.info("%s dependency metadata:\n%s", project_name,
-                     deps_info.getvalue())
+        super(PackageMetaBuilder, self)._finalize_build()
+        LOG.info("Python Dependency metadata:\n\n")
+        for (project_name, deps_info) in self._project_deps.iteritems():
+            LOG.info(deps_info)
 
     def _log_metadata(self, project):
         dependencies = self._extract_dependencies(project)
 
-        output = StringIO.StringIO()
+        output = StringIO()
         writer = csv.DictWriter(output, delimiter=',',
                                 quoting=csv.QUOTE_MINIMAL,
                                 fieldnames=ordered_fieldnames)
@@ -68,7 +69,8 @@ class PackageMetaBuilder(PackageBuilder):
             info['project_name'] = project.name
             writer.writerow(info)
 
-        self._project_dependencies[project.name] = output
+        self._project_deps[project.name] = output.getvalue()
+        output.close()
 
     def _get_package_license_homepage(self, package, version):
         url = BASE_PYPI_URL % locals()
