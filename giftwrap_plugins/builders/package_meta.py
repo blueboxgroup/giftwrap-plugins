@@ -64,6 +64,7 @@ class PackageMetaBuilder(PackageBuilder):
         output = StringIO()
         writer = csv.DictWriter(output, delimiter=',',
                                 quoting=csv.QUOTE_MINIMAL,
+                                lineterminator="\n",
                                 fieldnames=ordered_fieldnames)
 
         for dep in dependencies:
