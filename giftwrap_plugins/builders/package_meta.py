@@ -18,6 +18,7 @@
 
 import csv
 import logging
+import re
 import requests
 
 from collections import OrderedDict
@@ -25,6 +26,8 @@ from giftwrap.builders.package_builder import PackageBuilder
 from six import StringIO
 
 BASE_PYPI_URL = 'http://pypi.python.org/pypi/%(package)s/%(version)s/json'
+BASE_LP_URL = 'https://api.launchpad.net/1.0/%(project)s'
+
 ordered_fieldnames = OrderedDict([
     ('project_name', None),
     ('package', None),
@@ -68,7 +71,17 @@ class PackageMetaBuilder(PackageBuilder):
                                 fieldnames=ordered_fieldnames)
 
         for dep in dependencies:
-            license, homepage = self._get_package_license_homepage(**dep)
+            license, homepage = self._get_pypi_license_homepage(**dep)
+
+            if homepage and 'launchpad.net' in homepage:
+                license = self._get_launchpad_license(homepage)
+
+            if license == "UNKNOWN":
+                license = ""
+
+            if homepage == "UNKNOWN":
+                homepage = ""
+
             info = dep
             info['license_info'] = license
             info['homepage'] = homepage
@@ -78,7 +91,7 @@ class PackageMetaBuilder(PackageBuilder):
         self._project_deps[project.name] = output.getvalue()
         output.close()
 
-    def _get_package_license_homepage(self, package, version):
+    def _get_pypi_license_homepage(self, package, version):
         url = BASE_PYPI_URL % locals()
         resp = requests.get(url)
 
@@ -90,6 +103,24 @@ class PackageMetaBuilder(PackageBuilder):
             homepage = data['info'].get('home_page', None)
 
         return license, homepage
+
+    def _get_launchpad_license(self, homepage):
+        match = re.match('.*launchpad.net/([^/]+)', homepage)
+        if not match:
+            return None
+        project = match.groups(0)[0]
+
+        licenses = []
+        try:
+            url = BASE_LP_URL % locals()
+            resp = requests.get(url)
+            resp.raise_for_status()
+            project_data = resp.json()
+            licenses = project_data['licenses']
+        except Exception as e:
+            LOG.debug("Failed to fetch Launchpad license for %s. "
+                      "Skipping. Reason: %s" % (project, e))
+        return ', '.join(licenses)
 
     def _extract_dependencies(self, project):
         pip_path = self._get_venv_pip_path(project.install_path)
