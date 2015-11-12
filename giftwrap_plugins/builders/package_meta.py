@@ -18,10 +18,13 @@
 
 import csv
 import logging
+import re
 import requests
+import threading
 
 from collections import OrderedDict
 from giftwrap.builders.package_builder import PackageBuilder
+from launchpadlib.launchpad import Launchpad
 from six import StringIO
 
 BASE_PYPI_URL = 'http://pypi.python.org/pypi/%(package)s/%(version)s/json'
@@ -45,6 +48,13 @@ class PackageMetaBuilder(PackageBuilder):
         urllib_logger = logging.getLogger("urllib3")
         if urllib_logger:
             urllib_logger.setLevel(logging.CRITICAL)
+        self._launchpad = None
+
+    def _prepare_project_build(self, project):
+        super(PackageMetaBuilder, self)._prepare_project_build(project)
+        _thread = threading.current_thread()
+        self._launchpad = Launchpad.login_anonymously('giftwrap-plugins-%s' %
+                                                      _thread.name)
 
     def _finalize_project_build(self, project):
         super(PackageMetaBuilder, self)._finalize_project_build(project)
@@ -68,7 +78,17 @@ class PackageMetaBuilder(PackageBuilder):
                                 fieldnames=ordered_fieldnames)
 
         for dep in dependencies:
-            license, homepage = self._get_package_license_homepage(**dep)
+            license, homepage = self._get_pypi_license_homepage(**dep)
+
+            if homepage and 'launchpad.net' in homepage:
+                license = self._get_launchpad_license(homepage)
+
+            if license == "UNKNOWN":
+                license = None
+
+            if homepage == "UNKNOWN":
+                homepage = None
+
             info = dep
             info['license_info'] = license
             info['homepage'] = homepage
@@ -78,7 +98,7 @@ class PackageMetaBuilder(PackageBuilder):
         self._project_deps[project.name] = output.getvalue()
         output.close()
 
-    def _get_package_license_homepage(self, package, version):
+    def _get_pypi_license_homepage(self, package, version):
         url = BASE_PYPI_URL % locals()
         resp = requests.get(url)
 
@@ -87,9 +107,19 @@ class PackageMetaBuilder(PackageBuilder):
         if resp.status_code == 200:
             data = resp.json()
             license = data['info'].get('license', None)
-            homepage = data['info'].get('home_page', None)
+            homepage = str(data['info'].get('home_page', None))
 
         return license, homepage
+
+    def _get_launchpad_license(self, homepage):
+        match = re.match('.*launchpad.net/([^/]+)', homepage)
+        if not match:
+            return None
+        project_name = match.groups(0)[0]
+        project = self._launchpad.projects[project_name]
+        if not project or not hasattr(project, 'licenses'):
+            return None
+        return ', '.join(project.licenses)
 
     def _extract_dependencies(self, project):
         pip_path = self._get_venv_pip_path(project.install_path)
